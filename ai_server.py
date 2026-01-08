@@ -10,7 +10,6 @@ from sklearn.ensemble import RandomForestClassifier
 
 app = Flask(__name__)
 
-# تعديل المسارات لتكون مرنة مع السيرفر
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 MODEL_PATH = os.path.join(BASE_DIR, "model", "sign_model.pkl")
 DATASET_DIR = os.path.join(BASE_DIR, "dataset")
@@ -130,3 +129,4 @@ def train_model():
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 8000))
     app.run(host='0.0.0.0', port=port)
+
