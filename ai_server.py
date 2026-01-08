@@ -10,8 +10,10 @@ from sklearn.ensemble import RandomForestClassifier
 
 app = Flask(__name__)
 
-MODEL_PATH = "model/sign_model.pkl"
-DATASET_DIR = "dataset"
+# تعديل المسارات لتكون مرنة مع السيرفر
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+MODEL_PATH = os.path.join(BASE_DIR, "model", "sign_model.pkl")
+DATASET_DIR = os.path.join(BASE_DIR, "dataset")
 
 mp_hands = mp.solutions.hands
 hands = mp_hands.Hands(
@@ -49,6 +51,10 @@ def process_base64_image(base64_string):
         print(f"Decoding Error: {e}")
         return None
 
+@app.route('/')
+def home():
+    return jsonify({"status": "AI Server is Live!"})
+
 @app.route('/frame', methods=['POST'])
 def predict_frame():
     global model
@@ -57,31 +63,25 @@ def predict_frame():
         frame_base64 = data.get('frame')
         
         if not frame_base64:
-            print("Warning: No image frame received in request")
             return jsonify({"error": "لم يتم إرسال الصورة"}), 400
 
         frame = process_base64_image(frame_base64)
         if frame is None:
-            print("Error: Image decoding failed")
             return jsonify({"error": "فشل في معالجة بيانات الصورة"}), 400
 
         rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         results = hands.process(rgb)
         
         if results.multi_hand_landmarks:
-            print("Success: Hand landmarks detected")
             landmarks = []
             for lm in results.multi_hand_landmarks[0].landmark:
                 landmarks.extend([lm.x, lm.y])
             
             if model is None:
-                print("Error: Prediction attempted but model is not loaded")
                 return jsonify({"error": "الموديل غير موجود، يرجى التدريب أولاً"}), 400
 
             prediction = model.predict(np.array(landmarks).reshape(1, -1))[0]
             arabic_text = english_to_arabic.get(prediction, prediction)
-            
-            print(f"Prediction result: {prediction} -> {arabic_text}")
             
             return jsonify({
                 "translatedText": arabic_text, 
@@ -89,16 +89,10 @@ def predict_frame():
                 "confidence": 0.98
             })
         
-        print("Info: No hand landmarks detected in the frame")
         return jsonify({"translatedText": "لم يتم اكتشاف إشارة", "confidence": 0})
 
     except Exception as e:
-        print(f"Internal Server Error: {str(e)}")
         return jsonify({"error": str(e)}), 500
-
-@app.route('/test', methods=['POST'])
-def test_user_action():
-    return predict_frame()
 
 @app.route('/train', methods=['POST'])
 def train_model():
@@ -106,7 +100,6 @@ def train_model():
     try:
         X, y = [], []
         if not os.path.exists(DATASET_DIR):
-             print(f"Error: Dataset directory {DATASET_DIR} not found")
              return jsonify({"error": "مجلد البيانات غير موجود"}), 400
 
         for file in os.listdir(DATASET_DIR):
@@ -120,10 +113,8 @@ def train_model():
                         y.append(label)
 
         if len(X) == 0:
-            print("Error: Training failed because dataset is empty")
             return jsonify({"error": "لا توجد بيانات كافية للتدريب"}), 400
 
-        print(f"Start training on {len(X)} samples...")
         new_model = RandomForestClassifier(n_estimators=100)
         new_model.fit(np.array(X), np.array(y))
 
@@ -132,12 +123,10 @@ def train_model():
             pickle.dump(new_model, f)
         
         model = new_model
-        print("Success: Model trained and saved successfully")
-        return jsonify({"status": "success", "message": "تم تحديث الموديل بنجاح بعد التدريب"})
+        return jsonify({"status": "success", "message": "تم تحديث الموديل بنجاح"})
     except Exception as e:
-        print(f"Training Error: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
-    print("AI Server is running on port 5100")
-    app.run(port=5100, debug=True)
+    port = int(os.environ.get("PORT", 8000))
+    app.run(host='0.0.0.0', port=port)
