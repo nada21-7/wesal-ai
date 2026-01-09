@@ -6,4 +6,6 @@ pillow
 arabic-reshaper
 python-bidi
 scikit-learn
+pandas
+
 
